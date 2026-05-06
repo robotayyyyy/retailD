@@ -407,3 +407,221 @@ OMS
   ├─► Seller Portal ──────── notify seller of new order
   └─► Notification ──────── send status updates to customer
 ```
+
+---
+
+## Data Schema Examples (JSON)
+
+### Order
+
+```json
+{
+  "order_id": "ORD-123",
+  "idempotency_key": "user-123-cart-456-1714900000",
+  "customer_id": "USR-001",
+  "channel": "ONLINE",
+  "status": "PAID",
+  "fulfillment_type": "STANDARD_DELIVERY",
+  "fulfillment_node_id": "DC-BKK-001",
+  "shipping_address": {
+    "name": "สมชาย มีสุข",
+    "address": "123 Sukhumvit Rd, Bangkok",
+    "postal_code": "10110",
+    "phone": "0812345678"
+  },
+  "items_total_thb": 124.0,
+  "shipping_fee_thb": 40.0,
+  "grand_total_thb": 164.0,
+  "created_at": "2024-05-01T09:00:00Z",
+  "updated_at": "2024-05-01T09:05:00Z"
+}
+```
+
+Channels: `ONLINE` `POS` `LINE` `EXTERNAL`
+
+Fulfillment types: `STANDARD_DELIVERY` `SAME_DAY` `CLICK_AND_COLLECT` `IN_STORE`
+
+---
+
+### OrderItem
+
+```json
+{
+  "order_item_id": "ITEM-ORD-123-001",
+  "order_id": "ORD-123",
+  "sku_id": "SKU-001",
+  "name": "Milo 180ml",
+  "qty": 2,
+  "unit_price_thb": 35.0,
+  "subtotal_thb": 70.0,
+  "seller_id": "SELLER-NESTLE-001"
+}
+```
+
+---
+
+### FulfillmentNode
+
+```json
+{
+  "order_id": "ORD-123",
+  "node_id": "DC-BKK-001",
+  "node_type": "DC",
+  "assigned_at": "2024-05-01T09:05:00Z",
+  "routing_reason": "STANDARD_DELIVERY_DC_PREFERRED"
+}
+```
+
+Same-day routed to store:
+
+```json
+{
+  "order_id": "ORD-124",
+  "node_id": "STORE-SILOM-001",
+  "node_type": "STORE",
+  "assigned_at": "2024-05-01T09:10:00Z",
+  "routing_reason": "SAME_DAY_NEAREST_STORE_WITH_ATP"
+}
+```
+
+---
+
+### PaymentRef
+
+```json
+{
+  "payment_ref_id": "PAY-ORD-123-001",
+  "order_id": "ORD-123",
+  "provider": "OMISE",
+  "transaction_id": "chrg_test_abc123xyz",
+  "amount_thb": 164.0,
+  "status": "CHARGED",
+  "charged_at": "2024-05-01T09:01:00Z",
+  "refunded_at": null
+}
+```
+
+After refund:
+
+```json
+{
+  "status": "REFUNDED",
+  "refunded_at": "2024-05-01T10:00:00Z"
+}
+```
+
+Statuses: `PENDING` `CHARGED` `REFUNDED` `FAILED`
+
+---
+
+### ShipmentRef
+
+```json
+{
+  "shipment_ref_id": "SHIP-ORD-123-001",
+  "order_id": "ORD-123",
+  "courier": "FLASH_EXPRESS",
+  "tracking_number": "FE1234567890TH",
+  "status": "SHIPPED",
+  "picked_up_at": "2024-05-01T14:00:00Z",
+  "delivered_at": null
+}
+```
+
+After delivery:
+
+```json
+{
+  "status": "DELIVERED",
+  "delivered_at": "2024-05-02T10:30:00Z"
+}
+```
+
+Statuses: `PENDING` `SHIPPED` `DELIVERED` `FAILED`
+
+---
+
+### IdempotencyKey
+
+MongoDB document (TTL index on `created_at`, expires after 24h):
+
+```json
+{
+  "_id": "user-123-cart-456-1714900000",
+  "order_id": "ORD-123",
+  "created_at": "2024-05-01T09:00:00Z"
+}
+```
+
+---
+
+### Queue Message Payloads
+
+`stock.reserve`:
+
+```json
+{
+  "order_id": "ORD-123",
+  "node_id": "DC-BKK-001",
+  "items": [
+    { "sku_id": "SKU-001", "qty": 2 },
+    { "sku_id": "SKU-003", "qty": 1 }
+  ]
+}
+```
+
+`payment.charge`:
+
+```json
+{
+  "order_id": "ORD-123",
+  "amount_thb": 164.0,
+  "payment_token": "tok_test_abc123"
+}
+```
+
+`wms.fulfill`:
+
+```json
+{
+  "order_id": "ORD-123",
+  "node_id": "DC-BKK-001",
+  "fulfillment_type": "STANDARD_DELIVERY",
+  "items": [
+    { "sku_id": "SKU-001", "qty": 2 },
+    { "sku_id": "SKU-003", "qty": 1 }
+  ],
+  "shipping_address": {
+    "name": "สมชาย มีสุข",
+    "address": "123 Sukhumvit Rd, Bangkok",
+    "postal_code": "10110",
+    "phone": "0812345678"
+  }
+}
+```
+
+`wms.packed` / `wms.failed`:
+
+```json
+{ "order_id": "ORD-123" }
+```
+
+`logistics.pickup`:
+
+```json
+{
+  "order_id": "ORD-123",
+  "node_id": "DC-BKK-001",
+  "pack_id": "PACK-20240501-0123"
+}
+```
+
+---
+
+### Status Reference
+
+| Entity | Status Values |
+|---|---|
+| Order | `PENDING` `PAID` `CONFIRMED` `READY_TO_SHIP` `SHIPPED` `DELIVERED` `RETURN_REQUESTED` `RETURNED` `REFUNDED` `CANCELLED` |
+| PaymentRef | `PENDING` `CHARGED` `REFUNDED` `FAILED` |
+| ShipmentRef | `PENDING` `SHIPPED` `DELIVERED` `FAILED` |

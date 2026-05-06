@@ -575,3 +575,285 @@ Reducing heartbeat timeout shortens the gap but increases false positives if net
 | StockBatch | SKU + Node + batch ID + expiry date + qty |
 | StockReservation | Order ID + SKU + Node + qty + status |
 | StockMovement | Audit log of every qty change with reason |
+
+---
+
+## Data Schema Examples (JSON)
+
+### StockNode
+
+```json
+{
+  "node_id": "DC-BKK-001",
+  "node_type": "DC",
+  "name": "Central DC Bangkok",
+  "status": "ONLINE",
+  "last_heartbeat_at": null
+}
+```
+
+Store node:
+
+```json
+{
+  "node_id": "STORE-SILOM-001",
+  "node_type": "STORE",
+  "name": "Store Silom",
+  "status": "ONLINE",
+  "last_heartbeat_at": "2024-05-01T10:58:00Z"
+}
+```
+
+---
+
+### SKU
+
+```json
+{
+  "sku_id": "SKU-001",
+  "name": "Milo 180ml",
+  "base_unit": "can",
+  "is_virtual": false,
+  "is_perishable": true,
+  "expiry_alert_days": 3
+}
+```
+
+---
+
+### UOMConversion
+
+```json
+{
+  "sku_id": "SKU-001",
+  "conversions": [
+    { "pack_level": "can",    "multiplier": 1  },
+    { "pack_level": "pack",   "multiplier": 6  },
+    { "pack_level": "carton", "multiplier": 144 },
+    { "pack_level": "pallet", "multiplier": 6912 }
+  ]
+}
+```
+
+---
+
+### BundleSKU
+
+```json
+{
+  "sku_id": "SKU-003",
+  "name": "Milo 180ml 6-pack",
+  "is_virtual": true,
+  "components": [
+    {
+      "component_sku_id": "SKU-001",
+      "qty_multiplier": 6
+    }
+  ]
+}
+```
+
+---
+
+### SKUStock
+
+```json
+{
+  "sku_id": "SKU-001",
+  "node_id": "STORE-SILOM-001",
+  "physical_qty": 30,
+  "reserved_qty": 2,
+  "buffer_pct": 0.20,
+  "buffer_min_units": 1,
+  "atp": 22,
+  "updated_at": "2024-05-01T10:55:00Z"
+}
+```
+
+ATP calculation:
+```
+buffer_units = MAX(30 × 20%, 1) = 6
+atp = 30 − 6 − 2 = 22
+```
+
+---
+
+### StockBatch
+
+```json
+{
+  "batch_id": "BATCH-A",
+  "sku_id": "SKU-001",
+  "node_id": "STORE-SILOM-001",
+  "qty": 20,
+  "expiry_date": "2024-06-01",
+  "status": "NEAR_EXPIRY",
+  "received_at": "2024-04-01T08:00:00Z"
+}
+```
+
+Statuses: `ACTIVE` `NEAR_EXPIRY` `EXPIRED` `WRITTEN_OFF`
+
+---
+
+### StockReservation
+
+```json
+{
+  "reservation_id": "RES-ORD-123-001",
+  "order_id": "ORD-123",
+  "sku_id": "SKU-001",
+  "node_id": "STORE-SILOM-001",
+  "qty": 2,
+  "status": "RESERVED",
+  "reserved_at": "2024-05-01T09:00:00Z",
+  "committed_at": null,
+  "released_at": null
+}
+```
+
+After shipment:
+
+```json
+{
+  "status": "COMMITTED",
+  "committed_at": "2024-05-01T14:00:00Z"
+}
+```
+
+After cancellation:
+
+```json
+{
+  "status": "RELEASED",
+  "released_at": "2024-05-01T10:00:00Z"
+}
+```
+
+---
+
+### StockMovement
+
+Inbound from supplier:
+
+```json
+{
+  "movement_id": "MOV-20240501-001",
+  "sku_id": "SKU-001",
+  "node_id": "DC-BKK-001",
+  "qty_delta": 980,
+  "reason": "INBOUND",
+  "reference_id": "RCP-20240501-001",
+  "batch_id": "BATCH-001",
+  "sale_type": null,
+  "override_id": null,
+  "original_price": null,
+  "sold_price": null,
+  "markdown_loss": null,
+  "loss_value_thb": null,
+  "created_at": "2024-05-01T09:30:00Z"
+}
+```
+
+Online order reserved:
+
+```json
+{
+  "movement_id": "MOV-20240501-002",
+  "sku_id": "SKU-001",
+  "node_id": "STORE-SILOM-001",
+  "qty_delta": -2,
+  "reason": "RESERVE",
+  "reference_id": "ORD-123",
+  "batch_id": null,
+  "sale_type": null,
+  "created_at": "2024-05-01T10:00:00Z"
+}
+```
+
+Markdown sale:
+
+```json
+{
+  "movement_id": "MOV-20240501-003",
+  "sku_id": "SKU-001",
+  "node_id": "STORE-SILOM-001",
+  "qty_delta": -1,
+  "reason": "SOLD",
+  "reference_id": "POS-TXN-00456",
+  "batch_id": "BATCH-A",
+  "sale_type": "MARKDOWN",
+  "override_id": "PRICE-OVR-001",
+  "original_price": 35.0,
+  "sold_price": 20.0,
+  "markdown_loss": 15.0,
+  "loss_value_thb": null,
+  "created_at": "2024-05-01T11:00:00Z"
+}
+```
+
+Write-off (expired):
+
+```json
+{
+  "movement_id": "MOV-20240501-004",
+  "sku_id": "SKU-001",
+  "node_id": "STORE-SILOM-001",
+  "qty_delta": -6,
+  "reason": "EXPIRED",
+  "reference_id": "BATCH-A",
+  "batch_id": "BATCH-A",
+  "sale_type": null,
+  "loss_value_thb": 210.0,
+  "created_at": "2024-06-01T08:00:00Z"
+}
+```
+
+Manual stock adjustment:
+
+```json
+{
+  "movement_id": "MOV-20240501-005",
+  "sku_id": "SKU-001",
+  "node_id": "STORE-SILOM-001",
+  "qty_delta": -3,
+  "reason": "ADJUSTMENT",
+  "adjustment_reason": "SHRINKAGE",
+  "system_qty_before": 30,
+  "actual_qty": 27,
+  "submitted_by": "STAFF-010",
+  "created_at": "2024-05-01T18:00:00Z"
+}
+```
+
+---
+
+### PriceOverride
+
+```json
+{
+  "override_id": "PRICE-OVR-001",
+  "sku_id": "SKU-001",
+  "node_id": "STORE-SILOM-001",
+  "batch_id": "BATCH-A",
+  "barcode": "9999999000123",
+  "override_price": 20.0,
+  "original_price": 35.0,
+  "reason": "NEAR_EXPIRY",
+  "valid_until": "2024-06-01",
+  "created_by": "STAFF-010",
+  "created_at": "2024-05-29T09:00:00Z"
+}
+```
+
+---
+
+### Status Reference
+
+| Entity | Status Values |
+|---|---|
+| StockNode | `ONLINE` `OFFLINE` |
+| StockBatch | `ACTIVE` `NEAR_EXPIRY` `EXPIRED` `WRITTEN_OFF` |
+| StockReservation | `RESERVED` `COMMITTED` `RELEASED` |
+| StockMovement reason | `INBOUND` `RESERVE` `COMMIT` `RELEASE` `SOLD` `RESTOCK` `TRANSFER` `ADJUSTMENT` `EXPIRED` `WRITE_OFF` |
+| StockMovement sale_type | `null` (full price) `MARKDOWN` |

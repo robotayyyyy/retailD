@@ -385,3 +385,300 @@ WMS
   ├─► Logistics ─────── hand off parcel, provide tracking number
   └─► Seller Portal ─── notify supplier of inbound receipt, discrepancy
 ```
+
+---
+
+## Data Schema Examples (JSON)
+
+### PurchaseOrder
+
+```json
+{
+  "po_id": "PO-20240501-001",
+  "supplier_id": "SUP-NESTLE-001",
+  "warehouse_id": "DC-BKK-001",
+  "status": "PENDING_DELIVERY",
+  "expected_delivery": "2024-05-01",
+  "created_at": "2024-04-20T08:00:00Z",
+  "lines": [
+    { "sku_id": "SKU-001", "name": "Milo 180ml", "qty_ordered": 1000 },
+    { "sku_id": "SKU-002", "name": "Milo 400ml", "qty_ordered": 500 }
+  ]
+}
+```
+
+---
+
+### InboundReceipt
+
+```json
+{
+  "receipt_id": "RCP-20240501-001",
+  "po_id": "PO-20240501-001",
+  "warehouse_id": "DC-BKK-001",
+  "received_at": "2024-05-01T09:30:00Z",
+  "received_by": "STAFF-001",
+  "status": "COMPLETED",
+  "lines": [
+    {
+      "sku_id": "SKU-001",
+      "qty_expected": 1000,
+      "qty_received": 980,
+      "discrepancy": -20,
+      "discrepancy_reason": "DAMAGED_IN_TRANSIT",
+      "bin_id": "BIN-B3-S4"
+    },
+    {
+      "sku_id": "SKU-002",
+      "qty_expected": 500,
+      "qty_received": 500,
+      "discrepancy": 0,
+      "bin_id": "BIN-B3-S5"
+    }
+  ]
+}
+```
+
+---
+
+### Bin / Location
+
+DC bin:
+
+```json
+{
+  "bin_id": "BIN-B3-S4",
+  "warehouse_id": "DC-BKK-001",
+  "zone": "B",
+  "aisle": "3",
+  "shelf": "4",
+  "bin_type": "STANDARD",
+  "capacity_units": 200,
+  "current_stock": [
+    { "sku_id": "SKU-001", "qty": 980, "batch_id": "BATCH-001" }
+  ]
+}
+```
+
+Store shelf (simpler — no zone/aisle):
+
+```json
+{
+  "bin_id": "STORE-SILOM-SHELF-DAIRY",
+  "warehouse_id": "STORE-SILOM-001",
+  "zone": null,
+  "aisle": null,
+  "shelf": "DAIRY",
+  "bin_type": "STORE_SHELF",
+  "current_stock": [
+    { "sku_id": "SKU-001", "qty": 15, "batch_id": "BATCH-002" }
+  ]
+}
+```
+
+---
+
+### PickTask
+
+```json
+{
+  "task_id": "PICK-20240501-0123",
+  "order_id": "ORD-123",
+  "warehouse_id": "DC-BKK-001",
+  "assigned_to": "STAFF-042",
+  "status": "IN_PROGRESS",
+  "created_at": "2024-05-01T10:00:00Z",
+  "items": [
+    {
+      "sku_id": "SKU-001",
+      "name": "Milo 180ml",
+      "qty": 2,
+      "bin_id": "BIN-B3-S4",
+      "picked": false
+    },
+    {
+      "sku_id": "SKU-003",
+      "name": "Instant Noodles",
+      "qty": 1,
+      "bin_id": "BIN-A1-S2",
+      "picked": false
+    }
+  ]
+}
+```
+
+Pick failure:
+
+```json
+{
+  "task_id": "PICK-20240501-0124",
+  "order_id": "ORD-124",
+  "status": "FAILED",
+  "failure_reason": "ITEM_NOT_FOUND",
+  "failed_at": "2024-05-01T10:45:00Z",
+  "items": [
+    { "sku_id": "SKU-001", "qty": 1, "bin_id": "BIN-B3-S4", "picked": false }
+  ]
+}
+```
+
+---
+
+### PickBatch (DC only)
+
+```json
+{
+  "batch_id": "BATCH-PICK-20240501-007",
+  "warehouse_id": "DC-BKK-001",
+  "assigned_to": "STAFF-042",
+  "status": "IN_PROGRESS",
+  "created_at": "2024-05-01T10:00:00Z",
+  "order_ids": ["ORD-123", "ORD-124", "ORD-125"],
+  "pick_tasks": ["PICK-0123", "PICK-0124", "PICK-0125"],
+  "total_items": 47
+}
+```
+
+---
+
+### PackRecord
+
+```json
+{
+  "pack_id": "PACK-20240501-0123",
+  "order_id": "ORD-123",
+  "packed_by": "STAFF-055",
+  "packed_at": "2024-05-01T11:00:00Z",
+  "box_size": "MEDIUM",
+  "weight_kg": 1.2,
+  "dimensions_cm": { "l": 30, "w": 20, "h": 15 },
+  "fragile": false,
+  "items_packed": [
+    { "sku_id": "SKU-001", "qty": 2 },
+    { "sku_id": "SKU-003", "qty": 1 }
+  ]
+}
+```
+
+---
+
+### ShipmentLabel
+
+```json
+{
+  "label_id": "LABEL-20240501-0123",
+  "order_id": "ORD-123",
+  "pack_id": "PACK-20240501-0123",
+  "courier": "FLASH_EXPRESS",
+  "tracking_number": "FE1234567890TH",
+  "destination": {
+    "name": "สมชาย มีสุข",
+    "address": "123 Sukhumvit Rd, Bangkok",
+    "postal_code": "10110",
+    "phone": "0812345678"
+  },
+  "generated_at": "2024-05-01T11:05:00Z",
+  "handed_to_courier_at": "2024-05-01T14:00:00Z"
+}
+```
+
+---
+
+### ReplenishmentOrder
+
+In transit:
+
+```json
+{
+  "replenishment_id": "RPL-20240501-001",
+  "from_warehouse_id": "DC-BKK-001",
+  "to_warehouse_id": "STORE-SILOM-001",
+  "status": "IN_TRANSIT",
+  "triggered_by": "STOCK_SERVICE_AUTO",
+  "created_at": "2024-05-01T08:00:00Z",
+  "dispatched_at": "2024-05-01T09:00:00Z",
+  "confirmed_received_at": null,
+  "lines": [
+    { "sku_id": "SKU-001", "qty_sent": 50, "qty_confirmed": null }
+  ]
+}
+```
+
+After store confirms receipt:
+
+```json
+{
+  "replenishment_id": "RPL-20240501-001",
+  "status": "COMPLETED",
+  "confirmed_received_at": "2024-05-01T11:30:00Z",
+  "lines": [
+    { "sku_id": "SKU-001", "qty_sent": 50, "qty_confirmed": 50 }
+  ]
+}
+```
+
+---
+
+### ReturnReceipt
+
+Good condition — restock:
+
+```json
+{
+  "return_id": "RET-20240501-001",
+  "order_id": "ORD-100",
+  "warehouse_id": "STORE-SILOM-001",
+  "received_by": "STAFF-010",
+  "received_at": "2024-05-01T15:00:00Z",
+  "items": [
+    {
+      "sku_id": "SKU-001",
+      "qty": 1,
+      "condition": "GOOD",
+      "disposition": "RESTOCK",
+      "bin_id": "STORE-SILOM-SHELF-DAIRY"
+    }
+  ],
+  "refund_triggered": true,
+  "refund_triggered_at": "2024-05-01T15:01:00Z",
+  "stock_adjusted_at": "2024-05-01T15:10:00Z"
+}
+```
+
+Damaged — write off:
+
+```json
+{
+  "return_id": "RET-20240501-002",
+  "order_id": "ORD-101",
+  "warehouse_id": "STORE-SILOM-001",
+  "received_by": "STAFF-010",
+  "received_at": "2024-05-01T15:30:00Z",
+  "items": [
+    {
+      "sku_id": "SKU-002",
+      "qty": 1,
+      "condition": "DAMAGED",
+      "disposition": "WRITE_OFF",
+      "write_off_reason": "PACKAGING_CRUSHED",
+      "loss_value_thb": 89.0
+    }
+  ],
+  "refund_triggered": true,
+  "refund_triggered_at": "2024-05-01T15:31:00Z",
+  "stock_adjusted_at": "2024-05-01T15:40:00Z"
+}
+```
+
+---
+
+### Status Reference
+
+| Entity | Status Values |
+|---|---|
+| PurchaseOrder | `PENDING_DELIVERY` `RECEIVED` `PARTIAL` `DISCREPANCY` |
+| InboundReceipt | `COMPLETED` `PARTIAL` |
+| PickTask | `PENDING` `IN_PROGRESS` `COMPLETED` `FAILED` |
+| PickBatch | `IN_PROGRESS` `COMPLETED` |
+| ReplenishmentOrder | `CREATED` `IN_TRANSIT` `COMPLETED` |
+| ReturnReceipt disposition | `RESTOCK` `WRITE_OFF` `RETURN_TO_SUPPLIER` |
