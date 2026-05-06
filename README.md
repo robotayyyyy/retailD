@@ -52,27 +52,30 @@ CUSTOMER CHANNELS
        └──────────────▼──────────────┘
                  [API Gateway]
                       │
-          ┌───────────┴───────────┐
-          ▼                       ▼
-    [Storefront]               [OMS]
-    (catalog, search,      (saga, routing,
-     cart, POS offline)     idempotency)
-          │    │                │    │
-          │    └────┐    ┌──────┘    │
-          │         ▼    ▼           │
-          │    [Pricing Engine]      │
-          │    (promotions,          │
-          │     coupons, rounding)   │
-          │                          │
-          ▼                          ▼
-    [Stock Service] ◄──────────── [WMS]
-    (ATP, reserve,               (DC + Stores,
-     states, expiry)              pick-pack)
-                                      │
-                                 [Logistics]
+          ┌───────────┴────────────────┐
+          ▼                            ▼
+    [Storefront]                    [OMS]
+    (search, cart,              (saga, routing,
+     POS offline)                idempotency)
+       │    │    │               │  │  │  │
+       │    │    │               │  │  │  └──► [Payment Service]
+       │    │    │               │  │  │       (charge / refund)
+       │    │    │               │  │  │
+       │    │    └──► [Pricing]◄─┘  │  └─────► [Notification Service]
+       │    │          Engine       │
+       │    │                       │
+       ▼    ▼                       ▼
+ [Product  [Stock Service] ◄──── [WMS] ◄───────┘
+  Catalog]  (ATP, reserve,       (DC + Stores,
+  (SKUs,     states, expiry)      pick-pack)
+   search                             │
+   sync)                         [Logistics]
                                  (last-mile,
                                   tracking,
                                   3PL + fleet)
+                                      ▲
+                                      │
+                              OMS ────┘  (logistics.pickup)
 
 SUPPLIER PORTALS (separate entry point)
 ┌──────────────┬──────────────┬──────────────┐

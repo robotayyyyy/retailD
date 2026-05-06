@@ -857,3 +857,86 @@ Manual stock adjustment:
 | StockReservation | `RESERVED` `COMMITTED` `RELEASED` |
 | StockMovement reason | `INBOUND` `RESERVE` `COMMIT` `RELEASE` `SOLD` `RESTOCK` `TRANSFER` `ADJUSTMENT` `EXPIRED` `WRITE_OFF` |
 | StockMovement sale_type | `null` (full price) `MARKDOWN` |
+
+---
+
+## Data Flow — DC to Store Replenishment
+
+How documents change at each step when stock moves from DC to a store.
+
+**Before — both nodes at rest**
+
+```json
+// SKUStock — DC
+{ "sku_id": "SKU-001", "node_id": "DC-BKK-001", "physical_qty": 500, "reserved_qty": 0, "atp": 400 }
+
+// SKUStock — Store Silom
+{ "sku_id": "SKU-001", "node_id": "STORE-SILOM-001", "physical_qty": 5, "reserved_qty": 0, "atp": 3 }
+```
+
+---
+
+**Step 1 — ReplenishmentOrder created, van departs**
+
+DC physical_qty drops immediately. Store is unchanged — stock is in transit, not yet available.
+
+```json
+// ReplenishmentOrder — created
+{
+  "replenishment_id": "RPL-001",
+  "from_warehouse_id": "DC-BKK-001",
+  "to_warehouse_id": "STORE-SILOM-001",
+  "status": "IN_TRANSIT",
+  "lines": [{ "sku_id": "SKU-001", "qty_sent": 50, "qty_confirmed": null }]
+}
+
+// SKUStock — DC  (physical_qty reduced)
+{ "sku_id": "SKU-001", "node_id": "DC-BKK-001", "physical_qty": 450, "reserved_qty": 0, "atp": 350 }
+
+// SKUStock — Store Silom  (unchanged — not arrived yet)
+{ "sku_id": "SKU-001", "node_id": "STORE-SILOM-001", "physical_qty": 5, "reserved_qty": 0, "atp": 3 }
+
+// StockMovement — DC deduction
+{ "movement_id": "MOV-001", "sku_id": "SKU-001", "node_id": "DC-BKK-001",
+  "qty_delta": -50, "reason": "TRANSFER", "reference_id": "RPL-001" }
+```
+
+---
+
+**Step 2 — Store staff confirms receipt**
+
+Store physical_qty increases. ReplenishmentOrder closed.
+
+```json
+// ReplenishmentOrder — completed
+{
+  "replenishment_id": "RPL-001",
+  "status": "COMPLETED",
+  "confirmed_received_at": "2024-05-01T11:30:00Z",
+  "lines": [{ "sku_id": "SKU-001", "qty_sent": 50, "qty_confirmed": 50 }]
+}
+
+// SKUStock — Store Silom  (physical_qty increased)
+{ "sku_id": "SKU-001", "node_id": "STORE-SILOM-001", "physical_qty": 55, "reserved_qty": 0, "atp": 43 }
+
+// SKUStock — DC  (unchanged)
+{ "sku_id": "SKU-001", "node_id": "DC-BKK-001", "physical_qty": 450, "reserved_qty": 0, "atp": 350 }
+
+// StockMovement — Store addition
+{ "movement_id": "MOV-002", "sku_id": "SKU-001", "node_id": "STORE-SILOM-001",
+  "qty_delta": +50, "reason": "TRANSFER", "reference_id": "RPL-001" }
+```
+
+---
+
+**Summary of what changed**
+
+| Document | Step 1 (van departs) | Step 2 (store confirms) |
+|---|---|---|
+| `ReplenishmentOrder` | created, `IN_TRANSIT` | `COMPLETED`, `qty_confirmed` filled |
+| `SKUStock` DC | `physical_qty` −50 | unchanged |
+| `SKUStock` Store | unchanged | `physical_qty` +50 |
+| `StockMovement` DC | −50, reason `TRANSFER` | — |
+| `StockMovement` Store | — | +50, reason `TRANSFER` |
+
+Both StockMovements reference the same `RPL-001` — full traceability of where stock came from and where it went.
